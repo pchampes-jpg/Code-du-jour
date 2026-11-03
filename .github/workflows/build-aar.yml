@@ -1,0 +1,84 @@
+# Construction de l'AAR pf-android sur un exécuteur GitHub (SDK Android et Google Maven accessibles).
+# Aucun secret, aucune permission d'écriture, aucun accès au serveur .20 ni aux autres projets.
+# Déclenché par un push sur la branche de travail (dossier pf-android/ ou ce fichier) ou manuellement.
+name: Construire AAR pf-android
+
+on:
+  push:
+    branches: [claude/plateforme-android-serveur-uudajd]
+    paths: ['pf-android/**', '.github/workflows/build-aar.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  aar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: pf-android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Vérifier le Gradle Wrapper contre les sommes officielles (gradle.org/release-checksums)
+        run: |
+          echo "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+          grep -qx 'distributionSha256Sum=544c35d6bd849ae8a5ed0bcea39ba677dc40f49df7d1835561582da2009b961d' gradle/wrapper/gradle-wrapper.properties
+          echo "Wrapper conforme"
+
+      - name: SDK Android (image GitHub) - compléter si nécessaire
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" > /dev/null
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+
+      - name: Construire l'AAR, publier le dépôt Maven local, contrôler l'AAR
+        run: tools/construire-aar.sh
+
+      - name: Compiler les tests (cœur et Android)
+        run: ./gradlew --no-daemon :pf-core:compileTestKotlin :pf-android-check:compileTestKotlin
+
+      # Les tests d'intégration de pf-core exigent l'arbre de la plateforme v0.1.2 (hors dépôt) : non exécutés ici.
+      # Robolectric : seuls les tests sans serveur (AndroidSqlDbTest) sont exécutables dans ce dépôt.
+      - name: Tests Android sous Robolectric (AndroidSqlDbTest)
+        id: robolectric
+        continue-on-error: true
+        run: ./gradlew --no-daemon :pf-android-check:test -Probolectric --tests 'pf.android.AndroidSqlDbTest'
+
+      - name: Empreintes, contenu et dépendances de l'AAR
+        run: |
+          AAR=pf-android/build/outputs/aar/pf-android-release.aar
+          test -f "$AAR"
+          mkdir -p out && cp "$AAR" out/
+          cp -r dist-maven out/dist-maven
+          (cd out && find . -type f ! -name 'SHA256SUMS.txt' | sort | xargs sha256sum > SHA256SUMS.txt)
+          {
+            echo "## AAR pf-android"
+            echo "Commit : \`$GITHUB_SHA\`"
+            echo; echo '### SHA-256'; echo '```'; cat out/SHA256SUMS.txt; echo '```'
+            echo; echo '### Contenu de l AAR'; echo '```'; unzip -l "$AAR"; echo '```'
+            echo; echo '### Dépendances déclarées (POM)'; echo '```'; sed -n '/<dependencies>/,/<\/dependencies>/p' dist-maven/pf/pf-android/0.1.0/pf-android-0.1.0.pom; echo '```'
+            echo; echo "Tests Robolectric (AndroidSqlDbTest) : ${{ steps.robolectric.outcome }}"
+            echo "Tests d'intégration pf-core (serveur v0.1.2) : NON EXÉCUTÉS ici (arbre de la plateforme absent du dépôt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat out/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pf-android-aar
+          path: |
+            pf-android/out/pf-android-release.aar
+            pf-android/out/dist-maven/**
+            pf-android/out/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

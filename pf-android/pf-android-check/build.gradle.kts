@@ -8,11 +8,14 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 tasks.withType<JavaCompile> { options.release.set(17) }
 
 // androidx.test (Google Maven) est inaccessible depuis l'environnement de développement initial (dl.google.com bloqué) :
-// Robolectric est exécuté sans ces artefacts optionnels. Sur un poste avec accès normal, retirer ces exclusions.
-configurations.matching { it.name.startsWith("test") }.configureEach {
-    exclude(group = "androidx.test")
-    exclude(group = "androidx.test.espresso")
-    exclude(group = "androidx.test.ext")
+// sans -Probolectric, Robolectric n'est pas exécuté et ces artefacts optionnels sont exclus. Avec -Probolectric
+// (poste ou exécuteur ayant accès à Google Maven), ils sont résolus normalement.
+if (!project.hasProperty("robolectric")) {
+    configurations.matching { it.name.startsWith("test") }.configureEach {
+        exclude(group = "androidx.test")
+        exclude(group = "androidx.test.espresso")
+        exclude(group = "androidx.test.ext")
+    }
 }
 
 val androidAll: Configuration by configurations.creating
@@ -40,7 +43,7 @@ dependencies {
 
 tasks.test {
     // Désactivé par défaut : Robolectric exige androidx.test (Google Maven), inaccessible dans l'environnement de
-    // développement initial. Sur un poste normal : `./gradlew :pf-android-check:test -Probolectric` (et retirer les exclusions ci-dessus).
+    // développement initial. Avec accès à Google Maven : `./gradlew :pf-android-check:test -Probolectric`.
     // `compileTestKotlin` vérifie néanmoins que les tests compilent contre le vrai framework Android.
     enabled = project.hasProperty("robolectric")
     useJUnit()
