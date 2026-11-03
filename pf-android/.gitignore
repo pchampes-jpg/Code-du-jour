@@ -1,0 +1,19 @@
+build/
+.gradle/
+*.db
+*.db-wal
+*.db-shm
+.kotlin/
+local.properties
+*.log
+
+# Fichiers sensibles : jamais versionnés (seuls les exemples sans secret sont conservés)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.p12
+*.keystore
+*.pfx
