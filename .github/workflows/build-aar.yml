@@ -55,7 +55,16 @@ jobs:
         continue-on-error: true
         run: ./gradlew --no-daemon :pf-android-check:test -Probolectric --tests 'pf.android.AndroidSqlDbTest'
 
+      - name: Diagnostic des tests Android (cause exacte et classpath)
+        if: always()
+        run: |
+          for f in pf-android-check/build/test-results/test/*.xml; do
+            [ -f "$f" ] && grep -m2 -A8 '<failure' "$f" | cut -c1-260
+          done || true
+          ./gradlew --no-daemon -q :pf-android-check:dependencies --configuration testRuntimeClasspath -Probolectric 2>/dev/null | grep -iE 'androidx|robolectric:|android-all' | sort -u | head -25 || true
+
       - name: Empreintes, contenu et dépendances de l'AAR
+        if: always()
         run: |
           AAR=pf-android/build/outputs/aar/pf-android-release.aar
           test -f "$AAR"
@@ -70,8 +79,15 @@ jobs:
             echo; echo '### Dépendances déclarées (POM)'; echo '```'; sed -n '/<dependencies>/,/<\/dependencies>/p' dist-maven/pf/pf-android/0.1.0/pf-android-0.1.0.pom; echo '```'
             echo; echo "Tests Robolectric (AndroidSqlDbTest) : ${{ steps.robolectric.outcome }}"
             echo "Tests d'intégration pf-core (serveur v0.1.2) : NON EXÉCUTÉS ici (arbre de la plateforme absent du dépôt)"
-          } >> "$GITHUB_STEP_SUMMARY"
-          cat out/SHA256SUMS.txt
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pf-android-tests
+          path: pf-android/pf-android-check/build/test-results/test/*.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
