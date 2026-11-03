@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 // Compile les sources de :pf-android contre le framework Android réel (android-all de Robolectric)
 // et exécute leurs tests sur JVM avec Robolectric. Ne produit pas d'AAR/APK.
 plugins { kotlin("jvm") }
@@ -15,6 +17,32 @@ if (!project.hasProperty("robolectric")) {
         exclude(group = "androidx.test")
         exclude(group = "androidx.test.espresso")
         exclude(group = "androidx.test.ext")
+    }
+} else {
+    // androidx.test:monitor & co. sont publiés en AAR : un module JVM les place tels quels sur le classpath (classes illisibles).
+    // Transformation standard : extraire classes.jar de chaque AAR.
+    val artifactType = Attribute.of("artifactType", String::class.java)
+    dependencies {
+        registerTransform(AarToJar::class.java) {
+            from.attribute(artifactType, "aar")
+            to.attribute(artifactType, "jar")
+        }
+    }
+}
+
+abstract class AarToJar : TransformAction<TransformParameters.None> {
+    @get:InputArtifact
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val inputArtifact: Provider<FileSystemLocation>
+
+    override fun transform(outputs: TransformOutputs) {
+        val aar = inputArtifact.get().asFile
+        ZipFile(aar).use { z ->
+            val e = z.getEntry("classes.jar")
+            if (e != null) {
+                outputs.file(aar.nameWithoutExtension + ".jar").outputStream().use { o -> z.getInputStream(e).use { i -> i.copyTo(o) } }
+            }
+        }
     }
 }
 
@@ -56,4 +84,11 @@ tasks.test {
         systemProperty("robolectric.dependency.dir", dir.absolutePath)
     }
     testLogging { events("passed", "skipped", "failed") }
+}
+
+// Diagnostic : noms des éléments androidx / robolectric réellement présents sur le classpath d'exécution des tests.
+tasks.register("afficherClasspathTests") {
+    doLast {
+        println(sourceSets["test"].runtimeClasspath.files.map { it.name }.filter { it.contains("androidx") || it.contains("monitor") || it.contains("annotation") || it.contains("robolectric") }.sorted().joinToString("\n"))
+    }
 }

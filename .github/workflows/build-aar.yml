@@ -61,7 +61,7 @@ jobs:
           for f in pf-android-check/build/test-results/test/*.xml; do
             [ -f "$f" ] && grep -m2 -A8 '<failure' "$f" | cut -c1-260
           done || true
-          ./gradlew --no-daemon -q :pf-android-check:dependencies --configuration testRuntimeClasspath -Probolectric 2>/dev/null | grep -iE 'androidx|robolectric:|android-all' | sort -u | head -25 || true
+          ./gradlew --no-daemon -q :pf-android-check:afficherClasspathTests -Probolectric 2>&1 | head -40 || true
 
       - name: Empreintes, contenu et dépendances de l'AAR
         if: always()
