@@ -1,9 +1,13 @@
-plugins { kotlin("jvm") }
+plugins {
+    kotlin("jvm")
+    `maven-publish`
+}
 
 kotlin {
-    jvmToolchain(21)
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }
+// Cible Java 17 quel que soit le JDK (17 ou plus) qui exécute Gradle : pas de « toolchain » imposée.
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 tasks.withType<JavaCompile> { options.release.set(17) }
 
 dependencies {
@@ -21,4 +25,10 @@ tasks.test {
     // Les tests d'intégration lancent le serveur Python v0.1.2 NON MODIFIÉ (chemin fourni par PF_PLATFORM_DIR).
     environment("PF_PLATFORM_DIR", System.getenv("PF_PLATFORM_DIR") ?: "")
     testLogging { events("passed", "skipped", "failed"); showStandardStreams = false }
+}
+
+java { withSourcesJar() }
+publishing {
+    publications { create<MavenPublication>("core") { artifactId = "pf-core"; from(components["java"]) } }
+    repositories { maven(url = rootProject.layout.projectDirectory.dir("dist-maven")) }
 }

@@ -2,7 +2,9 @@
 // et exécute leurs tests sur JVM avec Robolectric. Ne produit pas d'AAR/APK.
 plugins { kotlin("jvm") }
 
-kotlin { jvmToolchain(21); compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+// Cible Java 17 quel que soit le JDK (17 ou plus) qui exécute Gradle : pas de « toolchain » imposée.
+java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
 tasks.withType<JavaCompile> { options.release.set(17) }
 
 // androidx.test (Google Maven) est inaccessible depuis l'environnement de développement initial (dl.google.com bloqué) :
