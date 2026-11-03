@@ -19,14 +19,22 @@ if (!project.hasProperty("robolectric")) {
         exclude(group = "androidx.test.ext")
     }
 } else {
-    // androidx.test:monitor & co. sont publiés en AAR : un module JVM les place tels quels sur le classpath (classes illisibles).
-    // Transformation standard : extraire classes.jar de chaque AAR.
+    // androidx.test:monitor & co. sont publiés en AAR : sur le classpath brut d'un module JVM, leurs classes sont illisibles.
+    // On les résout dans une configuration dédiée et on en extrait classes.jar (vue d'artefacts + transformation aar -> jar).
     val artifactType = Attribute.of("artifactType", String::class.java)
     dependencies {
         registerTransform(AarToJar::class.java) {
             from.attribute(artifactType, "aar")
             to.attribute(artifactType, "jar")
         }
+    }
+    val androidxAars by configurations.creating {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+    }
+    dependencies {
+        androidxAars("androidx.test:monitor:1.7.2")
+        testRuntimeOnly(files(androidxAars.incoming.artifactView { attributes { attribute(artifactType, "jar") } }.files))
     }
 }
 
